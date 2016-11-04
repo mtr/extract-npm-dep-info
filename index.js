@@ -18,8 +18,9 @@ program
         'Write extracted info to file');
 
 
-function isPackageDependency(name, packageJson) {
-    return _.has(packageJson.dependencies, name);
+function isPackageDependency(name, dependency, packageJson) {
+    return _.has(packageJson.dependencies, name) &&
+        dependency.parents === packageJson.name;
 }
 
 function parseCrawlerResults(packageJson, licences) {
@@ -28,13 +29,14 @@ function parseCrawlerResults(packageJson, licences) {
             name = parts[0],
             version = parts[1];
 
-        if (!program.strict || isPackageDependency(name, packageJson)) {
+        if (!program.strict || isPackageDependency(name, value, packageJson)) {
             result.push({
                 name: name,
                 version: version,
                 licenses: value.licenses,
                 repository: value.repository,
-                licenseUrl: value.licenseUrl
+                licenseUrl: value.licenseUrl,
+                parents: value.parents
             });
         }
     }, []);
@@ -65,7 +67,10 @@ function output(data) {
 function parseDependencies() {
     program.parse(process.argv);
 
-    var jsonString = fs.readFileSync(path.join(__dirname, 'package.json'));
+    var packageJsonPath = path.join(process.cwd(), 'package.json');
+    console.log('Will read package.json from ', packageJsonPath);
+
+    var jsonString = fs.readFileSync(packageJsonPath);
     var packageJson = JSON.parse(jsonString);
 
     // console.log(packageJson);
