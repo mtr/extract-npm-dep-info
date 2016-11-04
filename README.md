@@ -1,2 +1,2 @@
 # extract-npm-dep-info
-Extract information about you npm dependencies, including versions and license texts.
+Extract information about your npm dependencies, including versions and license texts.
