@@ -1,0 +1,36 @@
+{
+  "name": "extract-npm-dep-info",
+  "version": "1.0.0",
+  "description": "Extract information about your npm dependencies, including versions and license texts.",
+  "main": "index.js",
+  "bin": {
+    "extract-npm-dep-info": "./index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mtr/extract-npm-dep-info.git"
+  },
+  "keywords": [
+    "npm",
+    "package",
+    "license",
+    "version",
+    "meta",
+    "information",
+    "depencenies"
+  ],
+  "author": "Martin Thorsen Ranang",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mtr/extract-npm-dep-info/issues"
+  },
+  "homepage": "https://github.com/mtr/extract-npm-dep-info#readme",
+  "dependencies": {
+    "commander": "^2.9.0",
+    "lodash": "^4.16.6",
+    "npm-license-crawler": "^0.1.4"
+  }
+}
