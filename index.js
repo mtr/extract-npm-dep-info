@@ -26,8 +26,8 @@ function isPackageDependency(name, dependency, packageJson) {
 function parseCrawlerResults(packageJson, licences) {
     var dependencies = _.transform(licences, function _foo(result, value, key) {
         var parts = key.split('@'),
-            name = parts[0],
-            version = parts[1];
+            version = parts.pop(),
+            name = parts.join('@');
 
         if (!program.strict || isPackageDependency(name, value, packageJson)) {
             result.push({
