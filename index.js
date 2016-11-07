@@ -78,7 +78,8 @@ function replaceUndefinedByNull(key, value) {
 function output(data) {
     if (program.output) {
         var json = JSON.stringify(data, replaceUndefinedByNull);
-        fs.writeFileSync(path.join(__dirname, program.output), json);
+        var destinationPath = path.join(process.cwd(), program.output);
+        fs.writeFileSync(destinationPath, json);
     } else {
         console.log(data);
     }
