@@ -68,9 +68,16 @@ function parseCrawlerResults(packageJson, licences) {
     };
 }
 
+function replaceUndefinedByNull(key, value) {
+    if (_.isUndefined(value)) {
+        return null;
+    }
+    return value;
+}
+
 function output(data) {
     if (program.output) {
-        var json = JSON.stringify(data);
+        var json = JSON.stringify(data, replaceUndefinedByNull);
         fs.writeFileSync(path.join(__dirname, program.output), json);
     } else {
         console.log(data);

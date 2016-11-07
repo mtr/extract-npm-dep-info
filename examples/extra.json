@@ -1,0 +1,10 @@
+{
+  "commander": {
+    "display_name": "Commander (from external)",
+    "comment": "Take command of your CLI!"
+  },
+  "lodash": {
+    "display_name": "Lodash (from external)",
+    "logo_url": "https://lodash.com/assets/img/error.svg"
+  }
+}
