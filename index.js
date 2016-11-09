@@ -11,16 +11,18 @@ var request = require('request');
 
 var version = '1.0.0';
 
+const _dependenciesExtraField = 'dependenciesExtra';
+
 program
     .version(version)
     .usage('[options]')
     .option('--strict', 'Only show packages that are listed as dependencies.')
     .option('-e, --extra <extra-file>',
         'Augment with extra information from file, if not supplied as ' +
-        '"dependencies_extra" in package.json.')
+        '"' + _dependenciesExtraField + '" in package.json.')
     .option('-a, --no-accumulate',
         'The default is to augment every package with the accumulated set of ' +
-        'extra fields, from all "dependencies_extra" fields, even if ' +
+        'extra fields, from all "' + _dependenciesExtraField + '" fields, even if ' +
         'they were not supplied per package.  This turns that behavior off.')
     .option('-o, --output [output file]', 'Write extracted info to file')
     .option('-q, --quiet', 'No output to console, except the generated data');
@@ -138,11 +140,13 @@ function _guessLicenseUrl(urlBase) {
         });
 }
 
+const _removeSingleEndlines = /[^\r\n]\r?\n([^\r\n])/g;
+
 function getLicenseText(url) {
     return new Promise(function (resolve, reject) {
         request(url, function _returnLicenseText(error, response, body) {
             if (!error && typeof body === 'string' && !body.match(/<html>/)) {
-                resolve(body);
+                resolve(body.replace(_removeSingleEndlines, '$1'));
             } else {
                 resolve(null);
             }
@@ -167,7 +171,7 @@ function addLicenseText(dependency) {
                     }, function _onRejected(results) {
                         dependency.licenseUrl = null;
                         resolve();
-                    });
+        })  ;
             } else {
                 consoleLog(chalk.red('Don\'t know how to handle the licenseUrl value'),
                     chalk.cyan(dependency.licenseUrl));
@@ -243,11 +247,11 @@ function getDependenciesExtra(packageJson) {
     var inlined,
         external;
 
-    if (_.has(packageJson, 'dependencies_extra')) {
+    if (_.has(packageJson, _dependenciesExtraField)) {
         consoleLog(chalk.cyan('Will augment dependency entries with info from'),
-            chalk.green('dependencies_extra'),
+            chalk.green(_dependenciesExtraField),
             chalk.cyan('field in'), chalk.magenta('package.json'));
-        inlined = packageJson.dependencies_extra;
+        inlined = packageJson[_dependenciesExtraField];
     }
     if (program.extra) {
         var extraPath = path.join(process.cwd(), program.extra);
@@ -259,7 +263,7 @@ function getDependenciesExtra(packageJson) {
     if (inlined && external) {
         consoleLog(chalk.cyan('Info from'), chalk.magenta(extraPath),
             chalk.cyan('will override info from'),
-            chalk.green('dependencies_extra'), chalk.cyan('field in'),
+            chalk.green(_dependenciesExtraField), chalk.cyan('field in'),
             chalk.magenta('package.json'), chalk.cyan('in case of collisions'))
     }
 

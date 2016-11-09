@@ -36,17 +36,17 @@
     "promise": "^7.1.1",
     "request": "^2.78.0"
   },
-  "dependencies_extra": {
+  "dependenciesExtra": {
     "commander": {
-      "display_name": "Commander"
+      "displayName": "Commander"
     },
     "lodash": {
-      "display_name": "Lodash",
-      "logo_url": "https://lodash.com/assets/img/lodash.svg",
+      "displayName": "Lodash",
+      "logoUrl": "https://lodash.com/assets/img/lodash.svg",
       "comment": "Saving developers' time, again and again."
     },
     "npm-license-crawler": {
-      "display_name": "NPM Licence Crawler"
+      "displayName": "NPM Licence Crawler"
     }
   }
 }
