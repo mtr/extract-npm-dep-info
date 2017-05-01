@@ -9,7 +9,7 @@ var Promise = require('promise');
 var npmLicenseCrawler = require('npm-license-crawler');
 var request = require('request');
 
-var version = '1.0.0';
+var version = '1.0.1';
 
 const _dependenciesExtraField = 'dependenciesExtra';
 
@@ -140,13 +140,13 @@ function _guessLicenseUrl(urlBase) {
         });
 }
 
-const _removeSingleEndlines = /[^\r\n]\r?\n([^\r\n])/g;
+const _removeSingleEndlines = /([^\r\n])\r?\n([^\r\n])/g;
 
 function getLicenseText(url) {
     return new Promise(function (resolve, reject) {
         request(url, function _returnLicenseText(error, response, body) {
             if (!error && typeof body === 'string' && !body.match(/<html>/)) {
-                resolve(body.replace(_removeSingleEndlines, '$1'));
+                resolve(body.replace(_removeSingleEndlines, '$1 $2'));
             } else {
                 resolve(null);
             }
@@ -171,7 +171,7 @@ function addLicenseText(dependency) {
                     }, function _onRejected(results) {
                         dependency.licenseUrl = null;
                         resolve();
-        })  ;
+                    });
             } else {
                 consoleLog(chalk.red('Don\'t know how to handle the licenseUrl value'),
                     chalk.cyan(dependency.licenseUrl));
