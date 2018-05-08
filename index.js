@@ -1,15 +1,16 @@
 #! /usr/bin/env node
 
-var _ = require('lodash');
-var chalk = require('chalk');
-var fs = require('fs');
-var path = require('path');
-var program = require('commander');
-var Promise = require('promise');
-var npmLicenseCrawler = require('npm-license-crawler');
-var request = require('request');
+const _ = require('lodash');
+const chalk = require('chalk');
+const fs = require('fs');
+const path = require('path');
+const program = require('commander');
+const Promise = require('promise');
+const npmLicenseCrawler = require('npm-license-crawler');
+const request = require('request');
+// require('promise/lib/rejection-tracking').enable();  // <-- For debugging during development only.
 
-var version = '1.0.1';
+const version = '1.1.0';
 
 const _dependenciesExtraField = 'dependenciesExtra';
 
@@ -39,80 +40,81 @@ function isPackageDependency(name, dependency, packageJson) {
         dependency.parents === packageJson.name;
 }
 
-var _ignoreGitHttpPrefixRegEx = /^git\+(https?.*)$/;
-var _ignoreGitSshPrefixRegEx = /^git\+ssh:\/\/([^@]+)@?(.*)$/;
-var _replaceGitHubTypoRegEx = /^https:\/\/wwwhub\.com\/(.*)$/;
+const _ignoreGitHttpPrefixRegEx = /^git\+(https?.*)$/;
+const _ignoreGitSshPrefixRegEx = /^git\+ssh:\/\/([^@]+)@?(.*)$/;
+const _replaceGitHubTypoRegEx = /^https:\/\/wwwhub\.com\/(.*)$/;
 
 function _cleanupUrls(str) {
-    if (typeof str === 'string') {
-        return str.replace(_ignoreGitHttpPrefixRegEx, '$1')
+    if (_.isString(str)) {
+        return str
+            .replace(_ignoreGitHttpPrefixRegEx, '$1')
             .replace(_ignoreGitSshPrefixRegEx, 'https://$2')
             .replace(_replaceGitHubTypoRegEx, 'https://github.com/$1');
     }
     return str;
 }
 
-var _licenseGuesses = [
+const _licenseGuesses = [
     'LICENSE',
     'LICENSE.txt',
     'LICENSE.md'
 ];
 
-var createHypothesisCrawler = function (guessUrl, i, crawlers) {
+function createHypothesisCrawler(guessUrl, i, crawlers) {
     return new Promise(function (resolve, reject) {
 
-        var crawler = request.head(guessUrl,
-            function _handleResponse(error, response, body) {
-                if (error) {
-                    consoleLog(chalk.red('HTTP request error:', error));
+        const crawler = request.head(guessUrl, (error, response, body) => {
+            if (error) {
+                consoleLog(chalk.red('HTTP request error:', error));
+                resolve({
+                    isValid: false,
+                    url: guessUrl,
+                    reason: 'HTTP request error: ' + error
+                });
+                return;
+            }
+
+            if (response) {
+                /*
+                 console.log('guessUrl', guessUrl);
+                 console.log('response', response.request.href);
+                 console.log('response.statusCode', response.statusCode);
+                 */
+
+                if (response.statusCode === 404) {
                     resolve({
                         isValid: false,
                         url: guessUrl,
-                        reason: 'HTTP request error: ' + error
+                        reason: '404 Not found.'
                     });
                     return;
+                } else {
+                    // console.log('guessUrl', guessUrl);
+                    // console.log('response', response.request.href);
+                    // console.log('response.statusCode', response.statusCode);
                 }
+            }
 
-                if (response) {
-                    /*
-                     console.log('guessUrl', guessUrl);
-                     console.log('response', response.request.href);
-                     console.log('response.statusCode', response.statusCode);
-                     */
-
-                    if (response.statusCode === 404) {
-                        resolve({
-                            isValid: false,
-                            url: guessUrl,
-                            reason: '404 Not found.'
-                        });
-                        return;
-                    }
-                }
-
-                if (typeof body === 'string' && !body.match(/<html>/)) {
-                    /*
-                     console.log('body #' + i, body);
-                     */
-                    resolve({
-                        isValid: true,
-                        url: guessUrl,
-                        actualUrl: response.request.href
-                    });
-
-                    for (var k = 0; k < crawlers.length; k++) {
-                        if (k !== i) {
-                            crawlers[k].abort();
-                        }
-                    }
-                    return;
-                }
-                reject('Crawler for ' + guessUrl + ' reached an unknown state');
-            })
-            .on('abort', function _onAbort() {
+            if (_.isString(body) && !body.match(/<html>/)) {
                 /*
-                 console.log('Aborted #' + i + ':', guessUrl);
+                 console.log('body #' + i, body);
                  */
+                resolve({
+                    isValid: true,
+                    url: guessUrl,
+                    actualUrl: response.request.href
+                });
+
+                for (var k = 0; k < crawlers.length; k++) {
+                    if (k !== i) {
+                        crawlers[k].abort();
+                    }
+                }
+                return;
+            }
+            reject('Crawler for ' + guessUrl + ' reached an unknown state.');
+        })
+            .on('abort', function _onAbort() {
                 resolve({
                     isValid: false,
                     url: guessUrl,
@@ -122,95 +124,166 @@ var createHypothesisCrawler = function (guessUrl, i, crawlers) {
 
         crawlers.push(crawler);
     });
-};
+}
 
 function _guessLicenseUrl(urlBase) {
-    var promises = [];
-    var crawlers = [];
+    const promises = [];
+    const crawlers = [];
 
-    for (var i = 0; i < _licenseGuesses.length; i++) {
+    for (let i = 0; i < _licenseGuesses.length; i++) {
         const guessUrl = urlBase + _licenseGuesses[i];
 
         promises.push(createHypothesisCrawler(guessUrl, i, crawlers));
     }
 
     return Promise.all(promises)
-        .then(function _filterLicenses(results) {
-            return Promise.resolve(_.filter(results, ['isValid', true]));
+        .then((results) => {
+            const value = _.filter(results, ['isValid', true]);
+            return Promise.resolve(value);
+        }, (reason) => {
+            consoleLog('GuessLicenseUrl: Rejected:', reason);
+            Promise.reject(reason);
         });
+}
+
+const gitHubBlobRegExp = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.*)/;
+
+function _fixGitHubUrl(url) {
+    return url.match(gitHubBlobRegExp) ?
+        url.replace(gitHubBlobRegExp, 'https://raw.githubusercontent.com/$1/$2/$3') : url;
 }
 
 const _removeSingleEndlines = /([^\r\n])\r?\n([^\r\n])/g;
 
 function getLicenseText(url) {
+    url = _fixGitHubUrl(url);
     return new Promise(function (resolve, reject) {
-        request(url, function _returnLicenseText(error, response, body) {
-            if (!error && typeof body === 'string' && !body.match(/<html>/)) {
-                resolve(body.replace(_removeSingleEndlines, '$1 $2'));
+        request(url, {}, (error, response, body) => {
+            // console.log('error, response, body', error, response, body);
+            // consoleLog('typeof body', typeof body);
+            if (!error && _.isString(body) && !body.match(/<html>/)) {
+                const result = !body.match(/\/\*/) ?
+                    body.replace(_removeSingleEndlines, '$1 $2') : body;
+                resolve(result);
             } else {
-                resolve(null);
+                // consoleLog(`* Received error for (${url}): error=${error}, body=${body}`);
+                // consoleLog(`* Received error for (${url}):`);
+                resolve();
             }
         });
     });
 }
 
-var _licenceRegEx = /license\.?(txt|md)?$/i;
+const _licenceRegEx = /license.*\.?(txt|md)?$/i;
 
 function addLicenseText(dependency) {
-    return new Promise(function (resolve, reject) {
-        if (!dependency.licenseUrl.match(_licenceRegEx)) {
+    return new Promise((resolve, reject) => {
+        function _handleReject(reason) {
+            consoleLog(chalk.red(`Could not get license text for ${dependency.name} (${dependency.repository}): ${reason}`));
+            dependency.licenseUrl = null;
+            dependency.licenseText = null;
+            resolve();
+        }
+
+        consoleLog(
+            chalk.cyan(`Looking up license text for`),
+            chalk.green(`${dependency.name} (${dependency.repository})`)
+        );
+        if (dependency.licenseUrl.match(_licenceRegEx)) {
+            consoleLog(chalk.cyan(`Will check plain URL for ${dependency.name}: ${dependency.licenseUrl}.`));
+            getLicenseText(dependency.licenseUrl)
+                .then((value) => {
+                    dependency.licenseText = value;
+                    resolve(value);
+                }, _handleReject);
+        } else {
             if (dependency.licenseUrl === dependency.repository) {
                 _guessLicenseUrl(dependency.licenseUrl + '/raw/master/')
-                    .then(function _onFulfilled(results) {
-                        dependency.licenseUrl = _.first(results).url;
+                    .then((results) => {
+                        if (results.length) {
+                            dependency.licenseUrl = _.first(results).url;
 
-                        getLicenseText(dependency.licenseUrl).then(function _setLicenseText(value) {
-                            dependency.licenseText = value;
-                            resolve(value);
-                        });
-                    }, function _onRejected(results) {
-                        dependency.licenseUrl = null;
-                        resolve();
-                    });
+                            getLicenseText(dependency.licenseUrl)
+                                .then(function _setLicenseText(value) {
+                                    dependency.licenseText = value;
+                                    resolve(value);
+                                }, _handleReject);
+                        } else {
+                            consoleLog(chalk.red(`Could not find license URL for "${dependency.name}" (${dependency.repository})`));
+                            resolve();
+                        }
+                    }, _handleReject);
             } else {
+                const urlBase = dependency.repository + '/raw/master/';
+                // consoleLog(`Checking ${urlBase} instead of ${dependency.licenseUrl}`);
+                _guessLicenseUrl(urlBase)
+                    .then((results) => {
+                        // consoleLog('results', results);
+                        if (results.length) {
+                            dependency.licenseUrl = _.first(results).url;
+
+                            getLicenseText(dependency.licenseUrl)
+                                .then(function _setLicenseText(value) {
+                                    dependency.licenseText = value;
+                                    resolve(value);
+                                }, _handleReject);
+                        } else {
+                            consoleLog(chalk.red(`Could not find license URL for "${dependency.name}" (${dependency.repository})`));
+                            resolve();
+                        }
+
+                    });
+
                 consoleLog(chalk.red('Don\'t know how to handle the licenseUrl value'),
                     chalk.cyan(dependency.licenseUrl));
                 resolve();
             }
-        } else {
-            getLicenseText(dependency.licenseUrl).then(function _setLicenseText(value) {
-                dependency.licenseText = value;
-                resolve(value);
-            });
         }
     });
 }
 
-function parseCrawlerResults(packageJson, licences) {
-    return new Promise(function (resolve, reject) {
-        var dependencies = _.transform(licences,
-            function _dependencyTransformer(result, value, key) {
-                var parts = key.split('@'),
-                    version = parts.pop(),
-                    name = parts.join('@');
+function extendWithExtraInfo(dependencies, dependenciesExtra, accumulatedExtra) {
+    return _.map(dependencies, function _addExtraInfo(entry) {
+        let extra;
+        if (_.has(dependenciesExtra, entry.name)) {
+            extra = dependenciesExtra[entry.name];
+        } else {
+            consoleLog(chalk.yellow('Warning: No augmentation data found for',
+                chalk.green(entry.name), chalk.yellow('package')));
+            extra = {};
+        }
 
-                if (!program.strict || isPackageDependency(name, value, packageJson)) {
-                    result.push({
-                        name: name,
-                        version: version,
-                        licenses: value.licenses,
-                        repository: _cleanupUrls(value.repository),
-                        licenseUrl: _cleanupUrls(value.licenseUrl),
-                        parents: value.parents
-                    });
-                }
-            }, []);
+        return _.defaults({}, extra, entry, accumulatedExtra);
+    });
+}
+
+function parseCrawlerResults(packageJson, licences, dependenciesExtra, accumulatedExtra) {
+    return new Promise(function (resolve, reject) {
+        let dependencies = _.transform(licences, (result, value, key) => {
+            const parts = key.split('@'),
+                version = parts.pop(),
+                name = parts.join('@');
+
+            if (!program.strict || isPackageDependency(name, value, packageJson)) {
+                result.push({
+                    name: name,
+                    version: version,
+                    licenses: value.licenses,
+                    repository: _cleanupUrls(value.repository),
+                    licenseUrl: _cleanupUrls(value.licenseUrl),
+                    parents: value.parents
+                });
+            }
+        }, []);
+
+        if (dependenciesExtra) {
+            dependencies = extendWithExtraInfo(dependencies, dependenciesExtra, accumulatedExtra);
+        }
 
         Promise.all(_.map(dependencies, addLicenseText))
-            .then(function onResolve(promises) {
-                var now = new Date();
-
-                var args = program.rawArgs.splice(2);
+            .then((promises) => {
+                const now = new Date();
+                const args = program.rawArgs.splice(2);
 
                 resolve({
                     name: packageJson.name,
@@ -220,7 +293,7 @@ function parseCrawlerResults(packageJson, licences) {
                     generated: now.toLocaleString(),
                     dependencies: dependencies
                 });
-            }, function onRejected(reason) {
+            }, (reason) => {
                 reject(reason);
             });
     });
@@ -235,16 +308,16 @@ function replaceUndefinedByNull(key, value) {
 
 function output(data) {
     if (program.output) {
-        var json = JSON.stringify(data, replaceUndefinedByNull);
-        var destinationPath = path.join(process.cwd(), program.output);
+        const json = JSON.stringify(data, replaceUndefinedByNull);
+        const destinationPath = path.join(process.cwd(), program.output);
         fs.writeFileSync(destinationPath, json);
     } else {
-        console.log(data);
+        consoleLog(data);
     }
 }
 
 function getDependenciesExtra(packageJson) {
-    var inlined,
+    let inlined,
         external;
 
     if (_.has(packageJson, _dependenciesExtraField)) {
@@ -254,10 +327,10 @@ function getDependenciesExtra(packageJson) {
         inlined = packageJson[_dependenciesExtraField];
     }
     if (program.extra) {
-        var extraPath = path.join(process.cwd(), program.extra);
+        const extraPath = path.join(process.cwd(), program.extra);
         consoleLog(chalk.cyan('Will use info from'), chalk.magenta(extraPath),
             chalk.cyan('for augmenting the dependency entries'));
-        var extraString = fs.readFileSync(extraPath);
+        const extraString = fs.readFileSync(extraPath);
         external = JSON.parse(extraString);
     }
     if (inlined && external) {
@@ -285,61 +358,56 @@ function getAccumulatedExtraFields(dependenciesExtra) {
     }, {});
 }
 
-function extendWithExtraInfo(data, dependenciesExtra, accumulatedExtra) {
-    _.each(data.dependencies, function _addExtraInfo(entry) {
-        var extra;
-        if (_.has(dependenciesExtra, entry.name)) {
-            extra = dependenciesExtra[entry.name];
-        } else {
-            consoleLog(chalk.yellow('Warning: No augmentation data found for',
-                chalk.green(entry.name), chalk.yellow('package')));
-            extra = {};
-        }
-
-        _.merge(entry, extra, accumulatedExtra);
-    });
-}
-
 function parseDependencies() {
     program.parse(process.argv);
 
-    var packageJsonPath = path.join(process.cwd(), 'package.json');
+    const packageJsonPath = path.join(process.cwd(), 'package.json');
     consoleLog(chalk.cyan('Will read package.json from'),
         chalk.magenta(packageJsonPath));
 
-    var jsonString = fs.readFileSync(packageJsonPath);
-    var packageJson = JSON.parse(jsonString);
-    var dependenciesExtra = getDependenciesExtra(packageJson);
-    var accumulatedExtra = {};
+    const jsonString = fs.readFileSync(packageJsonPath);
+    const packageJson = JSON.parse(jsonString);
+    const dependenciesExtra = getDependenciesExtra(packageJson);
+    let accumulatedExtra = {};
 
     if (program.accumulate) {
         accumulatedExtra = getAccumulatedExtraFields(dependenciesExtra);
     }
 
-    var origConsoleLog = console.log;
+    const origConsoleLog = console.log;
     console.log = function _silencedConsoleLog() {
     };  // Disable log.
 
-    npmLicenseCrawler.dumpLicenses({
-        start: '.',
-        exclude: [],
-        dependencies: true,
-        json: false,
-        csv: false,
-        gulp: false
-    }, function (error, results) {
-        console.log = origConsoleLog;  // Enable log.
-        parseCrawlerResults(packageJson, results)
-            .then(function _onResolve(data) {
-                if (dependenciesExtra) {
-                    extendWithExtraInfo(data, dependenciesExtra, accumulatedExtra);
-                }
-                output(data);
-            }, function onRejected(reason) {
-                consoleLog(chalk.red(reason));
-            });
+    return new Promise((resolve, reject) => {
+        npmLicenseCrawler.dumpLicenses({
+            start: '.',
+            exclude: [],
+            dependencies: true,
+            json: false,
+            csv: false,
+            gulp: false
+        }, (error, results) => {
+            console.log = origConsoleLog;  // Enable log.
+            parseCrawlerResults(packageJson, results, dependenciesExtra, accumulatedExtra)
+                .then((data) => {
+                    output(data);
+                    resolve();
+                }, (reason) => {
+                    consoleLog(chalk.red(`Parsing of crawled dependencies failed because: ${reason}`));
+                    reject();
+                });
 
+        });
     });
 }
 
-parseDependencies();
+try {
+    parseDependencies()
+        .then((value) => {
+            consoleLog(chalk.green('Status: OK'));
+        }, (reason) => {
+            consoleLog(chalk.red('Status: Error'));
+        });
+} catch (wat) {
+    consoleLog(chalk.red(`WAT?!: ${wat}`));
+}
